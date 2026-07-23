@@ -6,29 +6,6 @@
 
 &#x09;			**ApingX exists to ensure that fashion is remembered not just worn**
 
-**Guide**
-
-
-
-1. Fashion tells stories.
-2. Great collections deserve to be remembered.
-3. Great creators deserve to be recognised.
-4. Great supporters deserve to become part of the story.
-5. Technology is not our purpose.
-6. It is simply the tool that allows us to preserve provenance for generations to come.
-
-
-
-Create the world's first Street Wear Fashion House where ownership becomes part of the story
-
-
-
-
-
-
-
-**Principles**
-
 
 
 * Fashion comes first.
