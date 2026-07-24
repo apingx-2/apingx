@@ -62,5 +62,9 @@ Recognition is more valuable than speculation.
 
 
 
+**Principle 6**
 
+
+
+Economic rights are permanent. Experiences evolve. Recognition endures.
 
