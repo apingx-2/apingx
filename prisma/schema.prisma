@@ -6,3 +6,107 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum CollectionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  SOLD_OUT
+  ARCHIVED
+}
+
+enum CredentialType {
+  FOUNDER
+  CONTRIBUTOR
+}
+
+model User {
+  id          String   @id @default(cuid())
+  clerkUserId String   @unique
+  email       String   @unique
+  firstName   String
+  lastName    String
+  role        UserRole
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Collection {
+  id               String           @id @default(cuid())
+  collectionNumber Int              @unique
+  slug             String           @unique
+  name             String
+  subtitle         String?
+  story            String           @db.Text
+  status           CollectionStatus
+  launchDate       DateTime?
+  coverImageUrl    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  products         Product[]
+  credentials      Credential[]
+
+  @@index([status])
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  collectionId String
+  name         String
+  slug         String
+  description  String        @db.Text
+  priceInPence Int
+  currency     String        @default("GBP")
+  status       ProductStatus
+  imageUrl     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  collection   Collection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, slug])
+  @@index([collectionId])
+  @@index([status])
+}
+
+model Contributor {
+  id            String       @id @default(cuid())
+  displayName   String
+  biography     String?      @db.Text
+  email         String?
+  walletAddress String?
+  imageUrl      String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  credentials   Credential[]
+}
+
+model Credential {
+  id                    String         @id @default(cuid())
+  collectionId          String
+  contributorId         String?
+  credentialNumber      Int
+  type                  CredentialType
+  allocationBasisPoints Int
+  mintAddress           String?        @unique
+  currentOwnerWallet    String?
+  mintedAt              DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  collection            Collection     @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  contributor           Contributor?   @relation(fields: [contributorId], references: [id])
+
+  @@unique([collectionId, credentialNumber])
+  @@index([collectionId])
+  @@index([contributorId])
+  @@index([type])
+}

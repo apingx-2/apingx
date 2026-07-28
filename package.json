@@ -9,7 +9,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.12",
@@ -40,6 +45,10 @@
     "prettier-plugin-tailwindcss": "^0.6.11",
     "prisma": "6.19.3",
     "tailwindcss": "^4.0.14",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }
