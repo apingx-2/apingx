@@ -68,3 +68,11 @@ Recognition is more valuable than speculation.
 
 Economic rights are permanent. Experiences evolve. Recognition endures.
 
+
+
+**Principle 7**
+
+
+
+Our roots should be visible. Our technology should be invisible.
+
