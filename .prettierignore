@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+dist
+coverage
+*.lock
+package-lock.json
+
+# documentation and planning (not part of application source)
+constitution/
+architecture/
+tasks/
+council/
+contracts/
+decisions/
+README.md
