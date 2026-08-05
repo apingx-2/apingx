@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { AdminBrandBlock } from "@/components/admin/admin-brand-block";
 import { AdminNavLinks } from "@/components/admin/admin-nav-links";
 
 export function AdminMobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const panelId = useId();
+  const navigationLabelId = `${panelId}-navigation-label`;
 
   useEffect(() => {
     if (!isOpen) {
@@ -28,24 +30,19 @@ export function AdminMobileNav() {
   }, [isOpen]);
 
   return (
-    <div className="border-b border-[var(--admin-border)] bg-[var(--admin-shell)] lg:hidden">
-      <div className="flex items-center justify-between px-4 py-4">
-        <div>
-          <p className="text-base font-bold tracking-[0.22em] text-[var(--admin-text-primary)] uppercase">
-            ApingX
-          </p>
-          <p className="mt-1 text-[11px] tracking-[0.14em] text-[var(--admin-text-muted)] uppercase">
-            Archive Administration
-          </p>
-        </div>
+    <div className="surface-navigation border-b lg:hidden">
+      <div className="flex items-start justify-between gap-4 px-4 pb-4 pt-3">
+        <AdminBrandBlock showNavigationLabel={false} compact />
 
         <button
           type="button"
           aria-expanded={isOpen}
           aria-controls={panelId}
-          aria-label={isOpen ? "Close admin navigation" : "Open admin navigation"}
+          aria-label={
+            isOpen ? "Close admin navigation" : "Open admin navigation"
+          }
           onClick={() => setIsOpen((open) => !open)}
-          className="rounded-sm border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-xs font-semibold tracking-[0.16em] text-[var(--admin-text-primary)] uppercase transition-colors hover:border-[var(--admin-border-strong)] hover:bg-[var(--admin-surface-active)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--admin-accent)]"
+          className="surface-interactive focus-ring type-label shrink-0 rounded-sm px-3 py-2 transition-colors"
         >
           {isOpen ? "Close" : "Menu"}
         </button>
@@ -56,14 +53,20 @@ export function AdminMobileNav() {
           <button
             type="button"
             aria-label="Close admin navigation overlay"
-            className="fixed inset-0 z-40 bg-black/60"
+            className="fixed inset-0 z-40 bg-black/70"
             onClick={() => setIsOpen(false)}
           />
           <div
             id={panelId}
-            className="relative z-50 border-t border-[var(--admin-border)] bg-[var(--admin-shell)] px-4 py-4"
+            className="relative z-50 border-t border-[var(--border-subtle)] px-4 py-5"
           >
-            <AdminNavLinks onNavigate={() => setIsOpen(false)} />
+            <p className="type-label mb-3" id={navigationLabelId}>
+              Navigation
+            </p>
+            <AdminNavLinks
+              aria-labelledby={navigationLabelId}
+              onNavigate={() => setIsOpen(false)}
+            />
           </div>
         </>
       ) : null}

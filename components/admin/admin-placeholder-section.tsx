@@ -10,14 +10,10 @@ export function AdminPlaceholderSection({
   description,
 }: AdminPlaceholderSectionProps) {
   return (
-    <section className="rounded-md border border-dashed border-[var(--admin-border)] bg-[var(--admin-surface)] px-5 py-8">
-      <h2 className="text-lg font-semibold text-[var(--admin-text-primary)]">
-        {title}
-      </h2>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--admin-text-secondary)]">
-        {description}
-      </p>
-      <p className="mt-5 text-xs tracking-[0.14em] text-[var(--admin-text-muted)] uppercase">
+    <section className="surface-panel rounded-sm border border-dashed px-5 py-8 md:px-6">
+      <h2 className="type-collection">{title}</h2>
+      <p className="type-body mt-4 max-w-2xl">{description}</p>
+      <p className="type-metadata mt-6">
         Management tools will be added in a future task.
       </p>
     </section>

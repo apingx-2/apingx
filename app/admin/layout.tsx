@@ -13,7 +13,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="admin-theme min-h-screen bg-[var(--admin-bg)] text-[var(--admin-text-primary)]">
+    <div className="admin-theme min-h-screen bg-[var(--surface-0)] text-[var(--text-primary)]">
       <AdminMobileNav />
       <div className="lg:flex">
         <AdminSidebar />

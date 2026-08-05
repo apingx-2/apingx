@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: apingx-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: apingx
+      POSTGRES_PASSWORD: apingx_local_password
+      POSTGRES_DB: apingx
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - apingx_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apingx -d apingx"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  apingx_postgres_data:
+    name: apingx-postgres-data

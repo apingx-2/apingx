@@ -60,7 +60,7 @@ export default async function AdminOverviewPage() {
       {counts === null ? (
         <p
           role="status"
-          className="rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-secondary)]"
+          className="surface-panel type-body rounded-sm border px-4 py-3"
         >
           Database counts are unavailable. Summary cards will update once a
           connection is configured.
