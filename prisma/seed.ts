@@ -52,6 +52,26 @@ async function main() {
     },
   });
 
+  await prisma.credential.upsert({
+    where: {
+      collectionId_credentialNumber: {
+        collectionId: collection.id,
+        credentialNumber: 2,
+      },
+    },
+    update: {},
+    create: {
+      collectionId: collection.id,
+      contributorId: null,
+      credentialNumber: 2,
+      type: "FOUNDER",
+      allocationBasisPoints: 1000,
+      mintAddress: null,
+      currentOwnerWallet: null,
+      mintedAt: null,
+    },
+  });
+
   await prisma.product.upsert({
     where: {
       collectionId_slug: {
