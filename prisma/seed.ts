@@ -72,6 +72,59 @@ async function main() {
     },
   });
 
+  await prisma.credential.upsert({
+    where: {
+      collectionId_credentialNumber: {
+        collectionId: collection.id,
+        credentialNumber: 3,
+      },
+    },
+    update: {},
+    create: {
+      collectionId: collection.id,
+      contributorId: contributor.id,
+      credentialNumber: 3,
+      type: "CONTRIBUTOR",
+      allocationBasisPoints: 200,
+      mintAddress: null,
+      currentOwnerWallet: null,
+      mintedAt: null,
+    },
+  });
+
+  const secondContributor = await prisma.contributor.upsert({
+    where: { id: "seed_contributor_002" },
+    update: {},
+    create: {
+      id: "seed_contributor_002",
+      displayName: "Archive Collaborator",
+      biography: "Second contributor for distribution fixture coverage.",
+      email: null,
+      walletAddress: null,
+      imageUrl: null,
+    },
+  });
+
+  await prisma.credential.upsert({
+    where: {
+      collectionId_credentialNumber: {
+        collectionId: collection.id,
+        credentialNumber: 4,
+      },
+    },
+    update: {},
+    create: {
+      collectionId: collection.id,
+      contributorId: secondContributor.id,
+      credentialNumber: 4,
+      type: "CONTRIBUTOR",
+      allocationBasisPoints: 750,
+      mintAddress: null,
+      currentOwnerWallet: null,
+      mintedAt: null,
+    },
+  });
+
   await prisma.product.upsert({
     where: {
       collectionId_slug: {

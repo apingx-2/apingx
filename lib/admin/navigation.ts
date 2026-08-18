@@ -30,6 +30,11 @@ export const adminNavItems: AdminNavItem[] = [
     href: "/admin/credentials",
     description: "Digital certificates of participation",
   },
+  {
+    label: "Distributions",
+    href: "/admin/distributions",
+    description: "Contributor programme and compensation eligibility",
+  },
 ];
 
 export function isAdminNavActive(pathname: string, href: string): boolean {

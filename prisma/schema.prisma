@@ -30,6 +30,30 @@ enum CredentialType {
   CONTRIBUTOR
 }
 
+enum ContributionPeriodStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum ContributionEvidenceReviewStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum EligibilitySnapshotStatus {
+  QUALIFIED
+  NOT_QUALIFIED
+}
+
+enum DistributionCalculationStatus {
+  DRAFT
+  CALCULATED
+  APPROVED
+  VOID
+}
+
 model User {
   id          String   @id @default(cuid())
   clerkUserId String   @unique
@@ -42,19 +66,21 @@ model User {
 }
 
 model Collection {
-  id               String           @id @default(cuid())
-  collectionNumber Int              @unique
-  slug             String           @unique
-  name             String
-  subtitle         String?
-  story            String           @db.Text
-  status           CollectionStatus
-  launchDate       DateTime?
-  coverImageUrl    String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  products         Product[]
-  credentials      Credential[]
+  id                           String                        @id @default(cuid())
+  collectionNumber             Int                           @unique
+  slug                         String                        @unique
+  name                         String
+  subtitle                     String?
+  story                        String                        @db.Text
+  status                       CollectionStatus
+  launchDate                   DateTime?
+  coverImageUrl                String?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  products                     Product[]
+  credentials                  Credential[]
+  contributionPeriods          ContributionPeriod[]
+  distributionCalculationLines DistributionCalculationLine[]
 
   @@index([status])
 }
@@ -79,34 +105,177 @@ model Product {
 }
 
 model Contributor {
-  id            String       @id @default(cuid())
-  displayName   String
-  biography     String?      @db.Text
-  email         String?
-  walletAddress String?
-  imageUrl      String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  credentials   Credential[]
+  id                             String                          @id @default(cuid())
+  displayName                    String
+  biography                      String?                         @db.Text
+  email                          String?
+  walletAddress                  String?
+  imageUrl                       String?
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  credentials                    Credential[]
+  contributionPeriodParticipants ContributionPeriodParticipant[]
+  contributionRequirements       ContributionRequirement[]
+  contributionEvidence           ContributionEvidence[]
+  distributionCalculationLines   DistributionCalculationLine[]
 }
 
 model Credential {
-  id                    String         @id @default(cuid())
-  collectionId          String
-  contributorId         String?
-  credentialNumber      Int
-  type                  CredentialType
-  allocationBasisPoints Int
-  mintAddress           String?        @unique
-  currentOwnerWallet    String?
-  mintedAt              DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  collection            Collection     @relation(fields: [collectionId], references: [id], onDelete: Restrict)
-  contributor           Contributor?   @relation(fields: [contributorId], references: [id])
+  id                             String                          @id @default(cuid())
+  collectionId                   String
+  contributorId                  String?
+  credentialNumber               Int
+  type                           CredentialType
+  allocationBasisPoints          Int
+  mintAddress                    String?                         @unique
+  currentOwnerWallet             String?
+  mintedAt                       DateTime?
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  collection                     Collection                      @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  contributor                    Contributor?                    @relation(fields: [contributorId], references: [id])
+  contributionPeriodParticipants ContributionPeriodParticipant[]
+  distributionCalculationLines   DistributionCalculationLine[]
 
   @@unique([collectionId, credentialNumber])
   @@index([collectionId])
   @@index([contributorId])
   @@index([type])
+}
+
+model ContributionPeriod {
+  id                            String                          @id @default(cuid())
+  collectionId                  String
+  title                         String
+  startDate                     DateTime                        @db.Date
+  endDate                       DateTime                        @db.Date
+  status                        ContributionPeriodStatus        @default(DRAFT)
+  distributableAmountInPence    Int?
+  distributableAmountApprovedAt DateTime?
+  currency                      String                          @default("GBP")
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @updatedAt
+  collection                    Collection                      @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  participants                  ContributionPeriodParticipant[]
+  requirements                  ContributionRequirement[]
+  evidence                      ContributionEvidence[]
+  calculations                  DistributionCalculation[]
+
+  @@index([collectionId])
+  @@index([status])
+  @@index([collectionId, startDate])
+}
+
+model ContributionPeriodParticipant {
+  id                   String                        @id @default(cuid())
+  contributionPeriodId String
+  contributorId        String
+  credentialId         String
+  agreementReference   String?
+  enrolledAt           DateTime                      @default(now())
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+  contributionPeriod   ContributionPeriod            @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  contributor          Contributor                   @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  credential           Credential                    @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  calculationLines     DistributionCalculationLine[]
+
+  @@unique([contributionPeriodId, credentialId])
+  @@index([contributionPeriodId])
+  @@index([contributorId])
+  @@index([credentialId])
+}
+
+model ContributionRequirement {
+  id                        String                 @id @default(cuid())
+  contributionPeriodId      String
+  contributorId             String?
+  label                     String
+  description               String?                @db.Text
+  requiredVerificationCount Int                    @default(1)
+  sortOrder                 Int                    @default(0)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  contributionPeriod        ContributionPeriod     @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  contributor               Contributor?           @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  evidence                  ContributionEvidence[]
+
+  @@index([contributionPeriodId])
+  @@index([contributorId])
+}
+
+model ContributionEvidence {
+  id                        String                           @id @default(cuid())
+  contributionPeriodId      String
+  contributionRequirementId String
+  contributorId             String
+  referenceUrl              String?
+  note                      String?                          @db.Text
+  reviewStatus              ContributionEvidenceReviewStatus @default(PENDING)
+  submittedAt               DateTime                         @default(now())
+  reviewedAt                DateTime?
+  rejectionReason           String?                          @db.Text
+  invalidatedAt             DateTime?
+  invalidationReason        String?                          @db.Text
+  contributionPeriod        ContributionPeriod               @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  contributionRequirement   ContributionRequirement          @relation(fields: [contributionRequirementId], references: [id], onDelete: Restrict)
+  contributor               Contributor                      @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+
+  @@index([contributionPeriodId, contributorId])
+  @@index([contributionRequirementId])
+  @@index([reviewStatus])
+}
+
+model DistributionCalculation {
+  id                         String                        @id @default(cuid())
+  contributionPeriodId       String
+  calculationSequence        Int
+  status                     DistributionCalculationStatus @default(DRAFT)
+  calculationVersion         String
+  distributableAmountInPence Int
+  currency                   String                        @default("GBP")
+  calculatedAt               DateTime?
+  approvedAt                 DateTime?
+  voidedAt                   DateTime?
+  voidReason                 String?                       @db.Text
+  replacesCalculationId      String?                       @unique
+  createdAt                  DateTime                      @default(now())
+  updatedAt                  DateTime                      @updatedAt
+  contributionPeriod         ContributionPeriod            @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  replacesCalculation        DistributionCalculation?      @relation("CalculationReplacement", fields: [replacesCalculationId], references: [id], onDelete: Restrict)
+  replacedBy                 DistributionCalculation?      @relation("CalculationReplacement")
+  lines                      DistributionCalculationLine[]
+
+  @@unique([contributionPeriodId, calculationSequence])
+  @@index([contributionPeriodId, status])
+}
+
+model DistributionCalculationLine {
+  id                                 String                        @id @default(cuid())
+  distributionCalculationId          String
+  contributionPeriodParticipantId    String
+  contributorId                      String
+  credentialId                       String
+  collectionId                       String
+  contributorDisplayNameSnapshot     String
+  credentialNumberSnapshot           Int
+  collectionNumberSnapshot           Int
+  allocationBasisPointsSnapshot      Int
+  agreementReferenceSnapshot         String?
+  eligibilitySnapshot                EligibilitySnapshotStatus
+  distributableAmountInPenceSnapshot Int
+  calculatedCompensationInPence      Int
+  requirementAuditSnapshot           Json
+  createdAt                          DateTime                      @default(now())
+  distributionCalculation            DistributionCalculation       @relation(fields: [distributionCalculationId], references: [id], onDelete: Restrict)
+  contributionPeriodParticipant      ContributionPeriodParticipant @relation(fields: [contributionPeriodParticipantId], references: [id], onDelete: Restrict)
+  contributor                        Contributor                   @relation(fields: [contributorId], references: [id], onDelete: Restrict)
+  credential                         Credential                    @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+  collection                         Collection                    @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+
+  @@unique([distributionCalculationId, contributionPeriodParticipantId])
+  @@index([distributionCalculationId])
+  @@index([contributionPeriodParticipantId])
+  @@index([contributorId])
+  @@index([credentialId])
 }
