@@ -44,15 +44,15 @@ export function PeriodArchiveCard({ period }: PeriodArchiveCardProps) {
         </div>
         <div>
           <dt className="type-label text-[var(--text-secondary)]">
-            Distributable amount
+            Approved distributable amount
           </dt>
           <dd className="type-body mt-1">
-            {period.distributableAmountInPence !== null
+            {period.approvedDistributableAmountInPence !== null
               ? formatProductPrice(
-                  period.distributableAmountInPence,
+                  period.approvedDistributableAmountInPence,
                   period.currency,
                 )
-              : "Not recorded"}
+              : "Not approved"}
           </dd>
         </div>
         <div>

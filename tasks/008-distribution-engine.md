@@ -1463,3 +1463,582 @@ Confirm no actual payout occurs.
 ## Git Status
 
 Do not stage, commit or push.
+
+---
+
+# Task 008 Amendment — Distribution Basis and Net Qualifying Revenue
+
+## Distribution Basis and Net Qualifying Revenue
+
+### Purpose
+
+Contributor compensation must be calculated from a defined and auditable commercial basis rather than directly from headline sales, gross checkout receipts, NFT ownership, or an unexplained manually entered distributable amount.
+
+Task 008 therefore separates:
+
+1. **Contributor qualification** — determined by Contribution Requirements and verified Evidence.
+2. **Net Qualifying Revenue** — the reconciled commercial revenue attributable to the relevant Collection / Contribution Period.
+3. **Approved Distributable Amount** — the portion of Net Qualifying Revenue approved for Contributor compensation.
+4. **Distribution Calculation** — allocation of the approved distributable amount among eligible Contribution Period Participants.
+
+These are separate stages and must remain independently auditable.
+
+---
+
+## Net Qualifying Revenue
+
+### Definition
+
+**Net Qualifying Revenue ("NQR")** means the net ex-VAT amount actually retained by ApingX from sales of qualifying products attributable to the relevant Collection and revenue period, after applicable discounts, refunds/returns and successful payment chargebacks, but excluding shipping/delivery charges and excluding ApingX operating costs.
+
+The authoritative commercial formula is:
+
+```text
+Gross Qualifying Product Sales
+− Discounts
+− Product Returns / Refunds
+− Successful Product Chargebacks
+= Retained Product Revenue
+
+− VAT attributable to retained qualifying product revenue
+= Net Qualifying Revenue
+```
+
+Then:
+
+```text
+Net Qualifying Revenue
+× Contributor Pool Basis Points
+÷ 10,000
+= Proposed Distributable Amount
+```
+
+All authoritative monetary calculations must use integer minor currency units (pence for GBP).
+
+Floating-point arithmetic must not be used for authoritative financial calculations.
+
+---
+
+## Gross Qualifying Product Sales
+
+Gross Qualifying Product Sales represents the qualifying product value attributable to the relevant Collection and revenue period before the NQR deductions defined below.
+
+Only product revenue is qualifying revenue.
+
+Separately identified shipping or delivery charges are excluded.
+
+A future commerce integration may derive this figure automatically from order/payment records. Until such an integration exists, Task 008 may support an explicit Admin-entered and confirmed Distribution Basis.
+
+The origin of the figures must not change the calculation rules.
+
+---
+
+## Discounts
+
+Discounts reduce qualifying product revenue.
+
+Compensation must be based on the amount economically charged for the qualifying product, rather than the undiscounted catalogue/list price.
+
+Example:
+
+```text
+Product list price:        £100.00
+Discount:                  -£20.00
+Qualifying sale value:      £80.00
+```
+
+Do not calculate Contributor compensation from the £100 list price.
+
+---
+
+## Returns and Refunds
+
+Product refunds and returns reduce qualifying revenue.
+
+Only the qualifying **product component** of the refund is deducted from NQR.
+
+Examples:
+
+```text
+Full £100 qualifying product refund
+→ deduct £100 product revenue
+```
+
+```text
+£25 partial qualifying product refund
+→ deduct £25 product revenue
+```
+
+Refunded shipping/delivery charges must not be treated as a product-revenue deduction because shipping/delivery was not included as qualifying product revenue in the first place.
+
+Return-postage costs paid by ApingX are operating expenses and are not additional NQR deductions.
+
+A return/refund does not alter Contributor qualification.
+
+Returns affect the commercial pool, not whether the Contributor performed the required contribution.
+
+---
+
+## Chargebacks
+
+A successful chargeback or equivalent final payment reversal relating to qualifying product revenue reduces qualifying revenue.
+
+A pending dispute must not be treated as a final chargeback adjustment.
+
+A dispute resolved in ApingX's favour does not reduce qualifying revenue.
+
+Processor penalties, dispute fees or other ancillary payment-processing costs are operating expenses and are not NQR deductions.
+
+---
+
+## VAT
+
+Contributor compensation must not accrue on VAT.
+
+The Distribution Basis must therefore identify the VAT amount excluded from retained qualifying product revenue before calculating NQR.
+
+The VAT figure used for an approved Distribution Basis is an auditable financial input.
+
+Task 008 does not attempt to become a VAT accounting engine.
+
+Future commerce/accounting integrations may supply the VAT figure automatically.
+
+---
+
+## Shipping and Delivery
+
+Separately identified shipping and delivery charges are excluded from qualifying product revenue.
+
+They therefore:
+
+* do not increase Gross Qualifying Product Sales;
+* do not increase Net Qualifying Revenue;
+* do not generate Contributor compensation.
+
+Where shipping is refunded, that refunded shipping amount does not reduce NQR because the corresponding shipping receipt was not included in NQR.
+
+This compensation definition is separate from ApingX's accounting and statutory VAT treatment of delivery charges.
+
+---
+
+## Operating Costs
+
+Ordinary ApingX operating expenses must not be deducted when calculating NQR.
+
+Examples include:
+
+* manufacturing;
+* garment blanks;
+* printing and embroidery;
+* fulfilment;
+* warehousing;
+* payment-processing fees;
+* Stripe/payment-provider fees;
+* advertising;
+* photography;
+* staff;
+* professional fees;
+* website/software costs;
+* outbound shipping costs;
+* return shipping costs;
+* general overhead.
+
+Task 008 is a **revenue-based compensation model**, not a net-profit participation model.
+
+---
+
+# Distribution Basis
+
+Before a distributable amount can be approved, the Contribution Period must have a reconciled **Distribution Basis**.
+
+The Distribution Basis must record sufficient information to explain how the proposed distributable amount was derived.
+
+At minimum it must capture:
+
+* currency;
+* Gross Qualifying Product Sales;
+* discounts;
+* product returns/refunds;
+* successful product chargebacks;
+* retained product revenue;
+* VAT excluded;
+* Net Qualifying Revenue;
+* Contributor Pool Basis Points;
+* proposed distributable amount;
+* returns/revenue reconciliation cutoff timestamp;
+* basis calculation/version identifier;
+* approval timestamp once approved.
+
+Recommended version identifier:
+
+```text
+distribution-basis-v1
+```
+
+---
+
+## Derived Values
+
+Where practical, derived financial values must be calculated by the application rather than manually entered independently.
+
+For example:
+
+```text
+retainedProductRevenue =
+    grossQualifyingProductSales
+    − discounts
+    − productReturnsRefunds
+    − successfulProductChargebacks
+```
+
+```text
+netQualifyingRevenue =
+    retainedProductRevenue
+    − vatExcluded
+```
+
+```text
+proposedDistributableAmount =
+    floor(
+        netQualifyingRevenue
+        × contributorPoolBasisPoints
+        / 10,000
+    )
+```
+
+The application must reject internally inconsistent Distribution Basis data.
+
+Negative NQR is not permitted for a Distribution Calculation.
+
+Contributor Pool Basis Points must be within the permitted range of:
+
+```text
+0–10,000
+```
+
+---
+
+# Revenue Reconciliation Window
+
+Closing a Contribution Period finalises **Contributor eligibility**, but does not automatically finalise the commercial revenue basis.
+
+These are intentionally separate events.
+
+The lifecycle is:
+
+```text
+Contribution Period
+        ↓
+CLOSED
+        ↓
+Contributor eligibility final
+        ↓
+Revenue / returns reconciliation
+        ↓
+Distribution Basis prepared
+        ↓
+Distribution Basis approved
+        ↓
+Distribution Calculation created
+```
+
+A Distribution Calculation must not be created merely because the Contribution Period has closed.
+
+The Distribution Basis must first be reconciled and explicitly approved.
+
+---
+
+## Reconciliation Cutoff
+
+Every approved Distribution Basis must record a reconciliation cutoff timestamp.
+
+The cutoff means:
+
+> The Distribution Basis includes qualifying commercial transactions, refunds, returns and chargebacks recognised for this calculation through the stated reconciliation timestamp.
+
+This timestamp provides financial snapshot finality.
+
+Task 008 must not claim that no lawful return/refund can occur after this date.
+
+It is an accounting/compensation reconciliation boundary, not a limitation of consumer rights.
+
+---
+
+# Late Returns and Post-Cutoff Adjustments
+
+A return, refund or chargeback may legitimately occur after the reconciliation cutoff.
+
+An already APPROVED Distribution Basis or APPROVED Distribution Calculation must **not be silently mutated** in response.
+
+Task 008 must not automatically claw compensation back from a Contributor.
+
+Task 008 must not automatically deduct a historical adjustment from an unrelated future Contribution Period.
+
+Late financial corrections require an explicit correction mechanism.
+
+For Task 008 Phase 4, the existing audit principle applies:
+
+```text
+historical approved record
+→ preserve
+
+correction required
+→ VOID where permitted
+→ create explicit replacement snapshot
+```
+
+Any more advanced cross-period adjustment, reserve, clawback or settlement-offset mechanism is outside Task 008 and requires separate specification.
+
+---
+
+# Distribution Basis Approval
+
+Normal Admin editing may prepare an unapproved Distribution Basis.
+
+Approval must be an explicit action.
+
+Recommended UI terminology:
+
+**Review & Approve Distribution Basis**
+
+Before approval, the Admin must be able to review:
+
+```text
+Gross Qualifying Product Sales
+Discounts
+Returns / Refunds
+Chargebacks
+Retained Product Revenue
+VAT Excluded
+Net Qualifying Revenue
+Contributor Pool %
+Proposed Distributable Amount
+Reconciliation Cutoff
+```
+
+The approval interface must state clearly that:
+
+* approval finalises the financial basis used for Contributor calculation;
+* approval does not create a payment;
+* approval does not transfer funds;
+* approval does not itself create a Distribution Calculation unless separately requested.
+
+---
+
+# Approved Distribution Basis Immutability
+
+Once approved, the Distribution Basis becomes an historical financial record.
+
+Its financial inputs and derived values must not be edited in place.
+
+This includes:
+
+* gross qualifying product sales;
+* discounts;
+* returns/refunds;
+* chargebacks;
+* retained product revenue;
+* VAT excluded;
+* NQR;
+* Contributor Pool Basis Points;
+* distributable amount;
+* reconciliation cutoff;
+* basis version.
+
+Historical correction must use an explicit audit-safe correction/replacement workflow rather than overwriting approved values.
+
+---
+
+# Distribution Calculation Boundary
+
+The Distribution Calculation consumes the **Approved Distributable Amount**.
+
+It does not independently recalculate commerce revenue.
+
+The financial pipeline is:
+
+```text
+Commerce activity
+        ↓
+Distribution Basis
+        ↓
+Net Qualifying Revenue
+        ↓
+Contributor Pool Basis Points
+        ↓
+Approved Distributable Amount
+        ↓
+Distribution Calculation
+        ↓
+Participant allocation
+```
+
+The existing `distribution-v1` allocation formula remains:
+
+```text
+floor(
+    approvedDistributableAmountInPence
+    × allocationBasisPointsSnapshot
+    / 10,000
+)
+```
+
+subject to Contributor eligibility.
+
+---
+
+# Eligibility Separation
+
+Revenue reconciliation must never determine whether a Contributor is QUALIFIED.
+
+Qualification remains based exclusively on the Contribution Requirements and Evidence rules defined elsewhere in Task 008.
+
+Example:
+
+```text
+Contributor completes required activity
+        ↓
+Evidence VERIFIED
+        ↓
+Contributor QUALIFIED
+```
+
+Separately:
+
+```text
+Product commerce
+        ↓
+Returns/refunds reconciled
+        ↓
+NQR
+        ↓
+Approved Distributable Amount
+```
+
+The two streams meet only when the Distribution Calculation allocates the approved pool to eligible Participants.
+
+A customer return must not change a Contributor from QUALIFIED to NOT_QUALIFIED.
+
+---
+
+# Credential and NFT Separation
+
+The Distribution Basis must not use:
+
+* NFT ownership;
+* current NFT holder;
+* `currentOwnerWallet`;
+* `mintAddress`;
+* secondary-market ownership;
+
+to determine NQR, Contributor Pool Basis Points or the Approved Distributable Amount.
+
+The compensated party remains the Contributor.
+
+Credential records may provide allocation/provenance information to the Distribution Calculation only through the explicit Contribution Period Participant model defined elsewhere in Task 008.
+
+Possession of a Credential/NFT alone does not establish compensation entitlement.
+
+---
+
+# Historical Snapshot Requirements
+
+An historical Distribution Calculation must be traceable to the approved Distribution Basis used to create it.
+
+The historical record must make it possible to establish:
+
+1. what commercial revenue basis was approved;
+2. what returns/refunds and chargebacks were recognised;
+3. what reconciliation cutoff applied;
+4. what NQR resulted;
+5. what Contributor Pool Basis Points applied;
+6. what distributable amount resulted;
+7. which calculation consumed that approved amount;
+8. which Participants were eligible;
+9. what allocation snapshots were used;
+10. what compensation was calculated.
+
+Historical display must not depend on mutable live commerce data to explain these values.
+
+---
+
+# Initial Manual Workflow and Future Automation
+
+Task 008 may initially support Admin-entered Distribution Basis figures.
+
+This is intentionally an interim source-of-data mechanism.
+
+Future tasks may integrate commerce/payment/accounting systems to derive:
+
+* qualifying product sales;
+* discounts;
+* refunds;
+* returns;
+* chargebacks;
+* VAT;
+
+automatically.
+
+Such integrations must feed the same Distribution Basis model and must not change the underlying NQR definition without an explicit version change.
+
+The calculation source may evolve.
+
+The historical calculation rules must remain versioned and auditable.
+
+---
+
+# Worked Example
+
+Assume:
+
+```text
+Gross Qualifying Product Sales          £60,000.00
+Discounts                               -£3,000.00
+Product Returns / Refunds               -£5,000.00
+Successful Product Chargebacks          -£1,000.00
+                                        ──────────
+Retained Product Revenue                £51,000.00
+
+VAT Excluded                            -£8,500.00
+                                        ──────────
+NET QUALIFYING REVENUE                  £42,500.00
+
+Contributor Pool Basis Points               2,000
+Contributor Pool                              20%
+                                        ──────────
+PROPOSED DISTRIBUTABLE AMOUNT            £8,500.00
+```
+
+After explicit Distribution Basis approval:
+
+```text
+Approved Distributable Amount            £8,500.00
+```
+
+The subsequent Distribution Calculation applies Participant allocation basis points and eligibility to that £8,500 pool.
+
+Returns/refunds have already affected the pool and must not separately affect Contributor eligibility.
+
+---
+
+# Out of Scope
+
+Task 008 does not implement:
+
+* customer return requests;
+* return labels;
+* warehouse return processing;
+* Shopify order management;
+* automated Stripe refund ingestion;
+* automated VAT accounting;
+* tax returns;
+* Contributor clawbacks;
+* Contributor reserves;
+* cross-period settlement offsets;
+* payout execution;
+* bank transfers;
+* SOL/USDC transfers;
+* payroll;
+* settlement reconciliation.
+
+These require separate tasks/specifications.

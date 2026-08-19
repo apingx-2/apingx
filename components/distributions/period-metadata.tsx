@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ContributionPeriodStatus } from "@prisma/client";
 import { ClosePeriodPanel } from "@/components/distributions/close-period-panel";
+import { CalculationHistorySection } from "@/components/distributions/calculation-history-section";
+import { CalculationPreviewPanel } from "@/components/distributions/calculation-preview-panel";
 import {
   DiscardPeriodBlockedNotice,
   DiscardPeriodPanel,
@@ -16,6 +18,7 @@ import { RequirementForm } from "@/components/distributions/requirement-form";
 import { RequirementListItem } from "@/components/distributions/requirement-list-item";
 import { formatArchiveDate, formatArchiveDateTime } from "@/lib/collections/format-date";
 import { formatCollectionNumber } from "@/lib/collections/format-collection-number";
+import { isDistributionBasisApproved } from "@/lib/distribution/basis-lifecycle";
 import {
   formatAllocationBasisPoints,
   formatCredentialNumber,
@@ -31,10 +34,15 @@ import {
   getDiscardBlockReason,
 } from "@/lib/distribution/period-discard-lifecycle";
 import { formatEvidenceProgressLabel } from "@/lib/distribution/evidence-progress";
+import type { PeriodCalculationSummary } from "@/lib/distribution/get-period-calculations";
+import type { DistributionPreviewResult } from "@/lib/distribution/types";
 import { formatProductPrice } from "@/lib/products/price";
 
 type PeriodMetadataProps = {
   period: ContributionPeriodDetail;
+  calculations: PeriodCalculationSummary[];
+  preview: DistributionPreviewResult | null;
+  previewError: string | null;
   enrollmentOptions: {
     contributors: EnrollmentContributorOption[];
     credentials: EnrollmentCredentialOption[];
@@ -45,6 +53,9 @@ type PeriodMetadataProps = {
 
 export function PeriodMetadata({
   period,
+  calculations,
+  preview,
+  previewError,
   enrollmentOptions,
   requirementContributorOptions,
 }: PeriodMetadataProps) {
@@ -100,24 +111,36 @@ export function PeriodMetadata({
         <dl className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div>
             <dt className="type-label text-[var(--text-secondary)]">
-              Distributable amount
+              Distribution Basis
             </dt>
             <dd className="type-body mt-1">
-              {period.distributableAmountInPence !== null
-                ? formatProductPrice(
-                    period.distributableAmountInPence,
-                    period.currency,
-                  )
-                : "Not recorded"}
+              {period.distributionBasis
+                ? isDistributionBasisApproved(period.distributionBasis)
+                  ? "Approved"
+                  : "Prepared (not approved)"
+                : "Not prepared"}
             </dd>
           </div>
           <div>
             <dt className="type-label text-[var(--text-secondary)]">
-              Amount approval
+              Approved distributable amount
             </dt>
             <dd className="type-body mt-1">
-              {period.distributableAmountApprovedAt
-                ? formatArchiveDateTime(period.distributableAmountApprovedAt)
+              {period.distributionBasis?.approvedAt
+                ? formatProductPrice(
+                    period.distributionBasis.proposedDistributableAmountInPence,
+                    period.currency,
+                  )
+                : "Not approved"}
+            </dd>
+          </div>
+          <div>
+            <dt className="type-label text-[var(--text-secondary)]">
+              Basis approval
+            </dt>
+            <dd className="type-body mt-1">
+              {period.distributionBasis?.approvedAt
+                ? formatArchiveDateTime(period.distributionBasis.approvedAt)
                 : "Not approved"}
             </dd>
           </div>
@@ -405,6 +428,20 @@ export function PeriodMetadata({
         ) : discardBlockReason ? (
           <DiscardPeriodBlockedNotice reason={discardBlockReason} />
         ) : null
+      ) : null}
+
+      {isClosed && preview ? (
+        <CalculationPreviewPanel preview={preview} />
+      ) : null}
+
+      {isClosed && previewError ? (
+        <section className="surface-panel rounded-sm border p-6">
+          <p className="type-body text-[var(--text-secondary)]">{previewError}</p>
+        </section>
+      ) : null}
+
+      {isClosed ? (
+        <CalculationHistorySection period={period} calculations={calculations} />
       ) : null}
     </div>
   );

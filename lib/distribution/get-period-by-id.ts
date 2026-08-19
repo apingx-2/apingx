@@ -12,11 +12,26 @@ export type ContributionPeriodDetail = {
   startDate: Date;
   endDate: Date;
   status: "DRAFT" | "OPEN" | "CLOSED";
-  distributableAmountInPence: number | null;
-  distributableAmountApprovedAt: Date | null;
   currency: string;
   createdAt: Date;
   updatedAt: Date;
+  distributionBasis: {
+    id: string;
+    currency: string;
+    grossQualifyingProductSalesInPence: number;
+    discountsInPence: number;
+    returnsRefundsInPence: number;
+    successfulChargebacksInPence: number;
+    retainedProductRevenueInPence: number;
+    vatExcludedInPence: number;
+    netQualifyingRevenueInPence: number;
+    contributorPoolBasisPoints: number;
+    proposedDistributableAmountInPence: number;
+    reconciliationCutoffAt: Date;
+    basisVersion: string;
+    isLegacySyntheticPlaceholder: boolean;
+    approvedAt: Date | null;
+  } | null;
   collection: {
     id: string;
     collectionNumber: number;
@@ -156,6 +171,7 @@ export async function getContributionPeriodById(
             },
           },
         },
+        distributionBasis: true,
         _count: {
           select: {
             calculations: true,
@@ -216,11 +232,10 @@ export async function getContributionPeriodById(
         startDate: period.startDate,
         endDate: period.endDate,
         status: period.status,
-        distributableAmountInPence: period.distributableAmountInPence,
-        distributableAmountApprovedAt: period.distributableAmountApprovedAt,
         currency: period.currency,
         createdAt: period.createdAt,
         updatedAt: period.updatedAt,
+        distributionBasis: period.distributionBasis,
         collection: period.collection,
         participants: period.participants.map((participant) => ({
           id: participant.id,

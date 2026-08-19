@@ -1,5 +1,7 @@
 export const DISTRIBUTION_CALCULATION_VERSION = "distribution-v1";
 
+export const DISTRIBUTION_BASIS_VERSION = "distribution-basis-v1";
+
 export const BASIS_POINTS_DENOMINATOR = 10_000;
 
 export const MAX_ALLOCATION_BASIS_POINTS = 10_000;

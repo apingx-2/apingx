@@ -43,6 +43,7 @@ export type DistributionPreviewLine = {
   agreementReference: string | null;
   eligibility: DerivedContributorEligibility;
   calculatedCompensationInPence: number;
+  requirementAuditSnapshot: RequirementAuditSnapshotEntry[];
 };
 
 export type DistributionPreviewResult = {

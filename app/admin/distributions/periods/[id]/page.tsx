@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PeriodMetadata } from "@/components/distributions/period-metadata";
+import { buildClosedPeriodPreview } from "@/lib/distribution/build-period-preview";
 import { getContributionPeriodById } from "@/lib/distribution/get-period-by-id";
+import { getPeriodCalculations } from "@/lib/distribution/get-period-calculations";
 import {
   getContributorOptionsForRequirements,
   getEnrollmentOptions,
@@ -43,9 +45,10 @@ export default async function ContributionPeriodDetailPage({
     );
   }
 
-  const [enrollmentOptions, contributorOptions] = await Promise.all([
+  const [enrollmentOptions, contributorOptions, calculations] = await Promise.all([
     getEnrollmentOptions(id),
     getContributorOptionsForRequirements(id),
+    getPeriodCalculations(id),
   ]);
 
   if (
@@ -71,6 +74,8 @@ export default async function ContributionPeriodDetailPage({
     );
   }
 
+  const previewResult = buildClosedPeriodPreview(result.period);
+
   return (
     <div className="space-y-8">
       <div className="border-b border-[var(--border-subtle)] pb-8">
@@ -85,6 +90,9 @@ export default async function ContributionPeriodDetailPage({
 
       <PeriodMetadata
         period={result.period}
+        calculations={calculations}
+        preview={previewResult?.success ? previewResult.preview : null}
+        previewError={previewResult && !previewResult.success ? previewResult.error : null}
         enrollmentOptions={
           enrollmentOptions.status === "success"
             ? enrollmentOptions

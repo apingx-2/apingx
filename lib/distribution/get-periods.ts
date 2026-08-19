@@ -10,7 +10,7 @@ export type ContributionPeriodListItem = {
   startDate: Date;
   endDate: Date;
   status: "DRAFT" | "OPEN" | "CLOSED";
-  distributableAmountInPence: number | null;
+  approvedDistributableAmountInPence: number | null;
   currency: string;
   collection: {
     id: string;
@@ -72,6 +72,12 @@ export async function getContributionPeriods(): Promise<GetContributionPeriodsRe
             invalidatedAt: true,
           },
         },
+        distributionBasis: {
+          select: {
+            approvedAt: true,
+            proposedDistributableAmountInPence: true,
+          },
+        },
       },
     });
 
@@ -94,7 +100,10 @@ export async function getContributionPeriods(): Promise<GetContributionPeriodsRe
           startDate: period.startDate,
           endDate: period.endDate,
           status: period.status,
-          distributableAmountInPence: period.distributableAmountInPence,
+          approvedDistributableAmountInPence:
+            period.distributionBasis?.approvedAt != null
+              ? period.distributionBasis.proposedDistributableAmountInPence
+              : null,
           currency: period.currency,
           collection: period.collection,
           participantCount: period.participants.length,

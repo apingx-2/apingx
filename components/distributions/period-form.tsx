@@ -301,33 +301,6 @@ export function PeriodForm(props: PeriodFormProps) {
           </div>
         )}
 
-        <div className="space-y-2">
-          <label htmlFor="distributableAmountGbp" className="type-label">
-            Proposed distributable amount (GBP)
-          </label>
-          <input
-            id="distributableAmountGbp"
-            type="text"
-            inputMode="decimal"
-            placeholder="8500.00"
-            value={values.distributableAmountGbp}
-            disabled={isPending}
-            onChange={(event) =>
-              updateValue("distributableAmountGbp", event.target.value)
-            }
-            aria-invalid={Boolean(getFieldError(fieldErrors, "distributableAmountGbp"))}
-            className="focus-ring type-body w-full rounded-sm border border-[var(--border-default)] bg-transparent px-3 py-2.5"
-          />
-          <p className="type-status text-[var(--text-secondary)]">
-            Optional proposed amount for future calculation. Stored as whole
-            pence. Explicit approval is recorded in a later phase.
-          </p>
-          {getFieldError(fieldErrors, "distributableAmountGbp") ? (
-            <p className="type-status text-[var(--text-secondary)]">
-              {getFieldError(fieldErrors, "distributableAmountGbp")}
-            </p>
-          ) : null}
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">

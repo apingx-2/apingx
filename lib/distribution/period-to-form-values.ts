@@ -1,30 +1,25 @@
-import type { ContributionPeriodStatus } from "@prisma/client";
-import { toDateInputValue } from "@/lib/collections/format-date";
 import {
-  distributableAmountToInput,
+  defaultContributionPeriodFormValues,
   type ContributionPeriodFormValues,
 } from "@/lib/distribution/schemas";
+import { toDateInputValue } from "@/lib/collections/format-date";
 
-type PeriodFormSource = {
+export function periodToFormValues(period: {
   collectionId: string;
   title: string;
   startDate: Date;
   endDate: Date;
-  status: ContributionPeriodStatus;
-  distributableAmountInPence: number | null;
-};
-
-export function periodToFormValues(
-  period: PeriodFormSource,
-): ContributionPeriodFormValues {
+  status: ContributionPeriodFormValues["status"];
+}): ContributionPeriodFormValues {
   return {
     collectionId: period.collectionId,
     title: period.title,
     startDate: toDateInputValue(period.startDate),
     endDate: toDateInputValue(period.endDate),
     status: period.status,
-    distributableAmountGbp: distributableAmountToInput(
-      period.distributableAmountInPence,
-    ),
   };
+}
+
+export function emptyPeriodFormValues(): ContributionPeriodFormValues {
+  return { ...defaultContributionPeriodFormValues };
 }

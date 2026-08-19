@@ -3,6 +3,7 @@
 import {
   ContributionEvidenceReviewStatus,
   ContributionPeriodStatus,
+  DistributionCalculationStatus,
   Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -11,18 +12,27 @@ import {
   closeContributionPeriodSchema,
   createContributionPeriodSchema,
   createEvidenceSchema,
+  createReplacementCalculationSchema,
   createRequirementSchema,
+  createDistributionCalculationSchema,
   deleteRequirementSchema,
   discardContributionPeriodSchema,
-  distributableAmountInputToPence,
+  approveDistributionBasisSchema,
+  approveDistributionCalculationSchema,
   enrollParticipantSchema,
   invalidateEvidenceVerificationSchema,
   periodDateInputToDate,
   reviewEvidenceSchema,
   updateContributionPeriodSchema,
   updateRequirementSchema,
+  upsertDistributionBasisSchema,
+  voidDistributionCalculationSchema,
+  type ApproveDistributionBasisInput,
+  type ApproveDistributionCalculationInput,
   type CreateContributionPeriodInput,
+  type CreateDistributionCalculationInput,
   type CreateEvidenceInput,
+  type CreateReplacementCalculationInput,
   type CreateRequirementInput,
   type DeleteRequirementInput,
   type EnrollParticipantInput,
@@ -30,9 +40,30 @@ import {
   type ReviewEvidenceInput,
   type UpdateContributionPeriodInput,
   type UpdateRequirementInput,
+  type UpsertDistributionBasisInput,
+  type VoidDistributionCalculationInput,
 } from "@/lib/distribution/schemas";
 import { canEditRequirement } from "@/lib/distribution/requirement-lifecycle";
 import { canInvalidateEvidenceVerification } from "@/lib/distribution/evidence-lifecycle";
+import {
+  canApproveDistributionCalculation,
+  canVoidDistributionCalculation,
+} from "@/lib/distribution/calculation-lifecycle";
+import {
+  assertDerivedBasisConsistency,
+  deriveDistributionBasis,
+  getDistributionBasisVersion,
+  validateDistributionBasisInput,
+} from "@/lib/distribution/distribution-basis";
+import {
+  canApproveDistributionBasis,
+  canPrepareDistributionBasis,
+  canReconcileLegacySyntheticBasis,
+  getApproveDistributionBasisBlockReason,
+  getReconcileLegacySyntheticBlockReason,
+} from "@/lib/distribution/basis-lifecycle";
+import { persistDistributionCalculation } from "@/lib/distribution/persist-calculation";
+import { sumQualifiedAllocationBasisPoints } from "@/lib/distribution/allocation";
 import {
   canDiscardContributionPeriod,
   isDiscardEligiblePeriodStatus,
@@ -75,6 +106,12 @@ function revalidatePeriodPaths(periodId: string) {
   revalidatePath(`/admin/distributions/periods/${periodId}/edit`);
 }
 
+function revalidateCalculationPaths(calculationId: string, periodId: string) {
+  revalidatePeriodPaths(periodId);
+  revalidatePath(`/admin/distributions/calculations/${calculationId}`);
+  revalidatePath("/admin/distributions");
+}
+
 function isValidEditFormStatusTransition(
   currentStatus: ContributionPeriodStatus,
   nextStatus: ContributionPeriodStatus,
@@ -101,17 +138,12 @@ function isValidEditFormStatusTransition(
 function toPeriodWriteData(
   input: CreateContributionPeriodInput | UpdateContributionPeriodInput,
 ) {
-  const distributableAmountInPence = distributableAmountInputToPence(
-    input.distributableAmountGbp,
-  );
-
   return {
     collectionId: input.collectionId,
     title: input.title,
     startDate: periodDateInputToDate(input.startDate)!,
     endDate: periodDateInputToDate(input.endDate)!,
     status: input.status,
-    distributableAmountInPence,
     currency: "GBP" as const,
   };
 }
@@ -1182,6 +1214,684 @@ export async function invalidateEvidenceVerificationAction(
     return {
       success: false,
       error: "Unable to invalidate the evidence verification. Please try again.",
+    };
+  }
+}
+
+export async function upsertDistributionBasisAction(
+  input: UpsertDistributionBasisInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = upsertDistributionBasisSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Please review the Distribution Basis and correct the highlighted fields.",
+      fieldErrors: mapValidationErrors(parsed.error.flatten().fieldErrors),
+    };
+  }
+
+  try {
+    const period = await prisma.contributionPeriod.findUnique({
+      where: { id: parsed.data.contributionPeriodId },
+      include: {
+        distributionBasis: true,
+      },
+    });
+
+    if (!period) {
+      return {
+        success: false,
+        error: "This Contribution Period could not be found.",
+      };
+    }
+
+    if (
+      !canPrepareDistributionBasis({
+        periodStatus: period.status,
+        basis: period.distributionBasis,
+      })
+    ) {
+      return {
+        success: false,
+        error:
+          "The Distribution Basis cannot be changed in its current state.",
+      };
+    }
+
+    if (period.distributionBasis) {
+      const referencingCalculationCount =
+        await prisma.distributionCalculation.count({
+          where: { distributionBasisId: period.distributionBasis.id },
+        });
+
+      const reconcileBlockReason = getReconcileLegacySyntheticBlockReason({
+        basis: period.distributionBasis,
+        referencingCalculationCount,
+      });
+
+      if (reconcileBlockReason) {
+        return {
+          success: false,
+          error: reconcileBlockReason,
+        };
+      }
+
+      if (
+        !canReconcileLegacySyntheticBasis({
+          basis: period.distributionBasis,
+          referencingCalculationCount,
+        })
+      ) {
+        return {
+          success: false,
+          error:
+            "The legacy placeholder cannot be reconciled in its current state.",
+        };
+      }
+    }
+
+    const validation = validateDistributionBasisInput({
+      grossQualifyingProductSalesInPence:
+        parsed.data.grossQualifyingProductSalesGbp,
+      discountsInPence: parsed.data.discountsGbp,
+      returnsRefundsInPence: parsed.data.returnsRefundsGbp,
+      successfulChargebacksInPence: parsed.data.successfulChargebacksGbp,
+      vatExcludedInPence: parsed.data.vatExcludedGbp,
+      contributorPoolBasisPoints: parsed.data.contributorPoolBasisPoints,
+    });
+
+    if (!validation.valid) {
+      return {
+        success: false,
+        error: validation.error,
+        fieldErrors: validation.fieldErrors,
+      };
+    }
+
+    const basisData = {
+      currency: "GBP" as const,
+      grossQualifyingProductSalesInPence:
+        parsed.data.grossQualifyingProductSalesGbp,
+      discountsInPence: parsed.data.discountsGbp,
+      returnsRefundsInPence: parsed.data.returnsRefundsGbp,
+      successfulChargebacksInPence: parsed.data.successfulChargebacksGbp,
+      retainedProductRevenueInPence: validation.derived.retainedProductRevenueInPence,
+      vatExcludedInPence: parsed.data.vatExcludedGbp,
+      netQualifyingRevenueInPence: validation.derived.netQualifyingRevenueInPence,
+      contributorPoolBasisPoints: parsed.data.contributorPoolBasisPoints,
+      proposedDistributableAmountInPence:
+        validation.derived.proposedDistributableAmountInPence,
+      reconciliationCutoffAt: parsed.data.reconciliationCutoffAt,
+      basisVersion: getDistributionBasisVersion(),
+      isLegacySyntheticPlaceholder: false,
+    };
+
+    if (period.distributionBasis) {
+      const updated = await prisma.distributionBasis.updateMany({
+        where: {
+          id: period.distributionBasis.id,
+          approvedAt: null,
+        },
+        data: basisData,
+      });
+
+      if (updated.count === 0) {
+        return {
+          success: false,
+          error:
+            "The Distribution Basis cannot be changed because it has already been approved.",
+        };
+      }
+
+      revalidatePeriodPaths(period.id);
+      return { success: true, id: period.distributionBasis.id };
+    }
+
+    const basis = await prisma.distributionBasis.create({
+      data: {
+        contributionPeriodId: period.id,
+        ...basisData,
+      },
+    });
+
+    revalidatePeriodPaths(period.id);
+
+    return { success: true, id: basis.id };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        success: false,
+        error:
+          "A Distribution Basis already exists for this Contribution Period. Refresh and edit the existing record.",
+      };
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return {
+        success: false,
+        error:
+          "The Distribution Basis cannot be changed because it has already been approved.",
+      };
+    }
+
+    console.error(
+      "[distribution] Failed to save Distribution Basis",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      success: false,
+      error: "Unable to save the Distribution Basis. Please try again.",
+    };
+  }
+}
+
+export async function approveDistributionBasisAction(
+  input: ApproveDistributionBasisInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = approveDistributionBasisSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Unable to approve the Distribution Basis. Please try again.",
+    };
+  }
+
+  try {
+    const period = await prisma.contributionPeriod.findUnique({
+      where: { id: parsed.data.contributionPeriodId },
+      include: {
+        distributionBasis: true,
+      },
+    });
+
+    if (!period || !period.distributionBasis) {
+      return {
+        success: false,
+        error: "A Distribution Basis must be prepared before approval.",
+      };
+    }
+
+    const basis = period.distributionBasis;
+
+    const approveBlockReason = getApproveDistributionBasisBlockReason({
+      periodStatus: period.status,
+      basis,
+      currency: period.currency,
+    });
+
+    if (approveBlockReason) {
+      return {
+        success: false,
+        error: approveBlockReason,
+      };
+    }
+
+    if (
+      !canApproveDistributionBasis({
+        periodStatus: period.status,
+        basis,
+        currency: period.currency,
+      })
+    ) {
+      return {
+        success: false,
+        error: "The Distribution Basis cannot be approved in its current state.",
+      };
+    }
+
+    if (basis.basisVersion !== getDistributionBasisVersion()) {
+      return {
+        success: false,
+        error: "The Distribution Basis version is not supported for approval.",
+      };
+    }
+
+    if (
+      !assertDerivedBasisConsistency({
+        grossQualifyingProductSalesInPence: basis.grossQualifyingProductSalesInPence,
+        discountsInPence: basis.discountsInPence,
+        returnsRefundsInPence: basis.returnsRefundsInPence,
+        successfulChargebacksInPence: basis.successfulChargebacksInPence,
+        vatExcludedInPence: basis.vatExcludedInPence,
+        contributorPoolBasisPoints: basis.contributorPoolBasisPoints,
+        retainedProductRevenueInPence: basis.retainedProductRevenueInPence,
+        netQualifyingRevenueInPence: basis.netQualifyingRevenueInPence,
+        proposedDistributableAmountInPence: basis.proposedDistributableAmountInPence,
+      })
+    ) {
+      return {
+        success: false,
+        error: "The Distribution Basis figures are internally inconsistent.",
+      };
+    }
+
+    const updated = await prisma.distributionBasis.updateMany({
+      where: {
+        id: basis.id,
+        approvedAt: null,
+      },
+      data: {
+        approvedAt: new Date(),
+      },
+    });
+
+    if (updated.count === 0) {
+      return {
+        success: false,
+        error: "The Distribution Basis has already been approved.",
+      };
+    }
+
+    revalidatePeriodPaths(period.id);
+
+    return { success: true, id: basis.id };
+  } catch (error) {
+    console.error(
+      "[distribution] Failed to approve Distribution Basis",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      success: false,
+      error: "Unable to approve the Distribution Basis. Please try again.",
+    };
+  }
+}
+
+export async function createDistributionCalculationAction(
+  input: CreateDistributionCalculationInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = createDistributionCalculationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Unable to create the distribution calculation. Please try again.",
+    };
+  }
+
+  const result = await persistDistributionCalculation({
+    contributionPeriodId: parsed.data.contributionPeriodId,
+  });
+
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  revalidateCalculationPaths(result.calculationId, parsed.data.contributionPeriodId);
+
+  return { success: true, id: result.calculationId };
+}
+
+export async function approveDistributionCalculationAction(
+  input: ApproveDistributionCalculationInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = approveDistributionCalculationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Unable to approve the distribution calculation. Please try again.",
+    };
+  }
+
+  try {
+    const calculation = await prisma.distributionCalculation.findUnique({
+      where: { id: parsed.data.calculationId },
+      include: {
+        lines: {
+          select: {
+            allocationBasisPointsSnapshot: true,
+            eligibilitySnapshot: true,
+          },
+        },
+        contributionPeriod: {
+          select: {
+            id: true,
+            status: true,
+            currency: true,
+            distributionBasis: true,
+          },
+        },
+        distributionBasis: true,
+      },
+    });
+
+    if (!calculation) {
+      return {
+        success: false,
+        error: "This distribution calculation could not be found.",
+      };
+    }
+
+    const periodCalculations = await prisma.distributionCalculation.findMany({
+      where: { contributionPeriodId: calculation.contributionPeriodId },
+      select: {
+        id: true,
+        calculationSequence: true,
+        status: true,
+        distributableAmountInPence: true,
+        calculatedAt: true,
+        approvedAt: true,
+        voidedAt: true,
+        replacesCalculationId: true,
+        replacedBy: { select: { id: true } },
+        lines: { select: { calculatedCompensationInPence: true } },
+      },
+    });
+
+    const calculationsSummary = periodCalculations.map((entry) => ({
+      id: entry.id,
+      calculationSequence: entry.calculationSequence,
+      status: entry.status,
+      distributableAmountInPence: entry.distributableAmountInPence,
+      calculatedAt: entry.calculatedAt,
+      approvedAt: entry.approvedAt,
+      voidedAt: entry.voidedAt,
+      replacesCalculationId: entry.replacesCalculationId,
+      replacedById: entry.replacedBy?.id ?? null,
+      totalCalculatedCompensationInPence: entry.lines.reduce(
+        (sum, line) => sum + line.calculatedCompensationInPence,
+        0,
+      ),
+    }));
+
+    const approvedBasis =
+      calculation.distributionBasis ?? calculation.contributionPeriod.distributionBasis;
+
+    if (
+      !canApproveDistributionCalculation({
+        calculationStatus: calculation.status,
+        periodStatus: calculation.contributionPeriod.status,
+        distributionBasis: approvedBasis
+          ? {
+              grossQualifyingProductSalesInPence:
+                approvedBasis.grossQualifyingProductSalesInPence,
+              discountsInPence: approvedBasis.discountsInPence,
+              returnsRefundsInPence: approvedBasis.returnsRefundsInPence,
+              successfulChargebacksInPence:
+                approvedBasis.successfulChargebacksInPence,
+              vatExcludedInPence: approvedBasis.vatExcludedInPence,
+              contributorPoolBasisPoints: approvedBasis.contributorPoolBasisPoints,
+              retainedProductRevenueInPence:
+                approvedBasis.retainedProductRevenueInPence,
+              netQualifyingRevenueInPence: approvedBasis.netQualifyingRevenueInPence,
+              proposedDistributableAmountInPence:
+                approvedBasis.proposedDistributableAmountInPence,
+              currency: approvedBasis.currency,
+              basisVersion: approvedBasis.basisVersion,
+              reconciliationCutoffAt: approvedBasis.reconciliationCutoffAt,
+              approvedAt: approvedBasis.approvedAt,
+            }
+          : null,
+        calculations: calculationsSummary,
+        calculationId: calculation.id,
+      })
+    ) {
+      if (calculation.status !== DistributionCalculationStatus.CALCULATED) {
+        return {
+          success: false,
+          error: "Only calculated records can be approved.",
+        };
+      }
+
+      return {
+        success: false,
+        error:
+          "This calculation cannot be approved because another approved calculation already exists.",
+      };
+    }
+
+    if (
+      !approvedBasis?.approvedAt ||
+      calculation.distributableAmountInPence !==
+        approvedBasis.proposedDistributableAmountInPence
+    ) {
+      return {
+        success: false,
+        error:
+          "The calculation distributable amount no longer matches the approved Distribution Basis.",
+      };
+    }
+
+    const totalQualifiedAllocationBasisPoints = sumQualifiedAllocationBasisPoints(
+      calculation.lines.map((line) => ({
+        allocationBasisPoints: line.allocationBasisPointsSnapshot,
+        qualified: line.eligibilitySnapshot === "QUALIFIED",
+      })),
+    );
+
+    if (totalQualifiedAllocationBasisPoints > 10_000) {
+      return {
+        success: false,
+        error:
+          "Total qualified allocation exceeds 10,000 basis points. Approval is blocked.",
+      };
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const otherApproved = await tx.distributionCalculation.findFirst({
+        where: {
+          contributionPeriodId: calculation.contributionPeriodId,
+          status: DistributionCalculationStatus.APPROVED,
+          NOT: { id: calculation.id },
+        },
+        select: { id: true },
+      });
+
+      if (otherApproved) {
+        throw new Error("APPROVED_EXISTS");
+      }
+
+      return tx.distributionCalculation.update({
+        where: { id: calculation.id },
+        data: {
+          status: DistributionCalculationStatus.APPROVED,
+          approvedAt: new Date(),
+        },
+      });
+    });
+
+    revalidateCalculationPaths(updated.id, calculation.contributionPeriodId);
+
+    return { success: true, id: updated.id };
+  } catch (error) {
+    if (error instanceof Error && error.message === "APPROVED_EXISTS") {
+      return {
+        success: false,
+        error:
+          "Another approved calculation already exists for this Contribution Period.",
+      };
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        success: false,
+        error:
+          "Another approved calculation already exists for this Contribution Period.",
+      };
+    }
+
+    console.error(
+      "[distribution] Failed to approve distribution calculation",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      success: false,
+      error: "Unable to approve the distribution calculation. Please try again.",
+    };
+  }
+}
+
+export async function voidDistributionCalculationAction(
+  input: VoidDistributionCalculationInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = voidDistributionCalculationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Please review the void request and correct the highlighted fields.",
+      fieldErrors: mapValidationErrors(parsed.error.flatten().fieldErrors),
+    };
+  }
+
+  try {
+    const calculation = await prisma.distributionCalculation.findUnique({
+      where: { id: parsed.data.calculationId },
+      select: {
+        id: true,
+        status: true,
+        contributionPeriodId: true,
+      },
+    });
+
+    if (!calculation) {
+      return {
+        success: false,
+        error: "This distribution calculation could not be found.",
+      };
+    }
+
+    if (!canVoidDistributionCalculation({ calculationStatus: calculation.status })) {
+      return {
+        success: false,
+        error: "Only approved calculations can be voided.",
+      };
+    }
+
+    const updated = await prisma.distributionCalculation.update({
+      where: { id: calculation.id },
+      data: {
+        status: DistributionCalculationStatus.VOID,
+        voidedAt: new Date(),
+        voidReason: parsed.data.voidReason,
+      },
+    });
+
+    revalidateCalculationPaths(updated.id, calculation.contributionPeriodId);
+
+    return { success: true, id: updated.id };
+  } catch (error) {
+    console.error(
+      "[distribution] Failed to void distribution calculation",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      success: false,
+      error: "Unable to void the distribution calculation. Please try again.",
+    };
+  }
+}
+
+export async function createReplacementCalculationAction(
+  input: CreateReplacementCalculationInput,
+): Promise<DistributionActionResult> {
+  if (!process.env.DATABASE_URL) {
+    return unavailableResult();
+  }
+
+  const parsed = createReplacementCalculationSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Unable to create the replacement calculation. Please try again.",
+    };
+  }
+
+  try {
+    const voidedCalculation = await prisma.distributionCalculation.findUnique({
+      where: { id: parsed.data.voidedCalculationId },
+      select: {
+        id: true,
+        status: true,
+        contributionPeriodId: true,
+        replacedBy: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!voidedCalculation) {
+      return {
+        success: false,
+        error: "The calculation to replace could not be found.",
+      };
+    }
+
+    if (voidedCalculation.status !== DistributionCalculationStatus.VOID) {
+      return {
+        success: false,
+        error: "Only void calculations can be replaced.",
+      };
+    }
+
+    if (voidedCalculation.replacedBy) {
+      return {
+        success: false,
+        error: "This calculation already has a replacement record.",
+      };
+    }
+
+    const result = await persistDistributionCalculation({
+      contributionPeriodId: voidedCalculation.contributionPeriodId,
+      replacesCalculationId: voidedCalculation.id,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    revalidateCalculationPaths(
+      result.calculationId,
+      voidedCalculation.contributionPeriodId,
+    );
+
+    return { success: true, id: result.calculationId };
+  } catch (error) {
+    console.error(
+      "[distribution] Failed to create replacement calculation",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return {
+      success: false,
+      error: "Unable to create the replacement calculation. Please try again.",
     };
   }
 }

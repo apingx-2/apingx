@@ -144,26 +144,51 @@ model Credential {
 }
 
 model ContributionPeriod {
-  id                            String                          @id @default(cuid())
-  collectionId                  String
-  title                         String
-  startDate                     DateTime                        @db.Date
-  endDate                       DateTime                        @db.Date
-  status                        ContributionPeriodStatus        @default(DRAFT)
-  distributableAmountInPence    Int?
-  distributableAmountApprovedAt DateTime?
-  currency                      String                          @default("GBP")
-  createdAt                     DateTime                        @default(now())
-  updatedAt                     DateTime                        @updatedAt
-  collection                    Collection                      @relation(fields: [collectionId], references: [id], onDelete: Restrict)
-  participants                  ContributionPeriodParticipant[]
-  requirements                  ContributionRequirement[]
-  evidence                      ContributionEvidence[]
-  calculations                  DistributionCalculation[]
+  id                String                          @id @default(cuid())
+  collectionId      String
+  title             String
+  startDate         DateTime                        @db.Date
+  endDate           DateTime                        @db.Date
+  status            ContributionPeriodStatus        @default(DRAFT)
+  currency          String                          @default("GBP")
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+  collection        Collection                      @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  participants      ContributionPeriodParticipant[]
+  requirements      ContributionRequirement[]
+  evidence          ContributionEvidence[]
+  calculations      DistributionCalculation[]
+  distributionBasis DistributionBasis?
 
   @@index([collectionId])
   @@index([status])
   @@index([collectionId, startDate])
+}
+
+model DistributionBasis {
+  id                                 String                    @id @default(cuid())
+  contributionPeriodId               String                    @unique
+  currency                           String                    @default("GBP")
+  grossQualifyingProductSalesInPence Int
+  discountsInPence                   Int                       @default(0)
+  returnsRefundsInPence              Int                       @default(0)
+  successfulChargebacksInPence       Int                       @default(0)
+  retainedProductRevenueInPence      Int
+  vatExcludedInPence                 Int                       @default(0)
+  netQualifyingRevenueInPence        Int
+  contributorPoolBasisPoints         Int
+  proposedDistributableAmountInPence Int
+  reconciliationCutoffAt             DateTime
+  basisVersion                       String                    @default("distribution-basis-v1")
+  isLegacySyntheticPlaceholder       Boolean                   @default(false)
+  approvedAt                         DateTime?
+  createdAt                          DateTime                  @default(now())
+  updatedAt                          DateTime                  @updatedAt
+  contributionPeriod                 ContributionPeriod        @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  calculations                       DistributionCalculation[]
+
+  @@index([contributionPeriodId])
+  @@index([approvedAt])
 }
 
 model ContributionPeriodParticipant {
@@ -229,6 +254,7 @@ model ContributionEvidence {
 model DistributionCalculation {
   id                         String                        @id @default(cuid())
   contributionPeriodId       String
+  distributionBasisId        String?
   calculationSequence        Int
   status                     DistributionCalculationStatus @default(DRAFT)
   calculationVersion         String
@@ -242,12 +268,14 @@ model DistributionCalculation {
   createdAt                  DateTime                      @default(now())
   updatedAt                  DateTime                      @updatedAt
   contributionPeriod         ContributionPeriod            @relation(fields: [contributionPeriodId], references: [id], onDelete: Restrict)
+  distributionBasis          DistributionBasis?            @relation(fields: [distributionBasisId], references: [id], onDelete: Restrict)
   replacesCalculation        DistributionCalculation?      @relation("CalculationReplacement", fields: [replacesCalculationId], references: [id], onDelete: Restrict)
   replacedBy                 DistributionCalculation?      @relation("CalculationReplacement")
   lines                      DistributionCalculationLine[]
 
   @@unique([contributionPeriodId, calculationSequence])
   @@index([contributionPeriodId, status])
+  @@index([distributionBasisId])
 }
 
 model DistributionCalculationLine {

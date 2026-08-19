@@ -99,7 +99,6 @@ const periodFieldsSchema = z
       message: "End date is required.",
     }),
     status: contributionPeriodStatusSchema,
-    distributableAmountGbp: distributableAmountInputSchema,
   })
   .superRefine((value, ctx) => {
     const start = launchDateInputToNullableDate(value.startDate);
@@ -153,7 +152,6 @@ export type ContributionPeriodFormValues = {
   startDate: string;
   endDate: string;
   status: ContributionPeriodStatus;
-  distributableAmountGbp: string;
 };
 
 export const defaultContributionPeriodFormValues: ContributionPeriodFormValues =
@@ -163,7 +161,6 @@ export const defaultContributionPeriodFormValues: ContributionPeriodFormValues =
     startDate: "",
     endDate: "",
     status: ContributionPeriodStatus.DRAFT,
-    distributableAmountGbp: "",
   };
 
 export const enrollParticipantSchema = z.object({
@@ -304,4 +301,177 @@ export const discardContributionPeriodSchema = z.object({
 
 export type DiscardContributionPeriodInput = z.infer<
   typeof discardContributionPeriodSchema
+>;
+
+/**
+ * Normalizes Distribution Basis money input from HTML form strings or from
+ * already-parsed integer pence (server action re-validation).
+ */
+export function parseBasisMoneyInputToPence(value: unknown): number {
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) {
+      throw new Error("INVALID_BASIS_MONEY");
+    }
+
+    if (value < 0) {
+      throw new Error("NEGATIVE_BASIS_MONEY");
+    }
+
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("INVALID_BASIS_MONEY");
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new Error("EMPTY_BASIS_MONEY");
+  }
+
+  const normalized = normalizePriceInput(trimmed);
+
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    throw new Error("INVALID_BASIS_MONEY");
+  }
+
+  const pence = priceInputToPenceBigInt(normalized);
+
+  if (pence < BigInt(0)) {
+    throw new Error("NEGATIVE_BASIS_MONEY");
+  }
+
+  return Number(pence);
+}
+
+function parseReconciliationCutoffInput(value: unknown): Date {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new Error("INVALID_RECONCILIATION_CUTOFF");
+    }
+
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("INVALID_RECONCILIATION_CUTOFF");
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new Error("EMPTY_RECONCILIATION_CUTOFF");
+  }
+
+  const parsed = Date.parse(trimmed);
+
+  if (Number.isNaN(parsed)) {
+    throw new Error("INVALID_RECONCILIATION_CUTOFF");
+  }
+
+  return new Date(trimmed);
+}
+
+const basisMoneyFieldSchema = z.preprocess(
+  (value) => {
+    try {
+      return parseBasisMoneyInputToPence(value);
+    } catch {
+      return value;
+    }
+  },
+  z
+    .number({
+      invalid_type_error: "Enter a valid amount in GBP, such as 8500.00.",
+    })
+    .int("Enter a valid amount in GBP, such as 8500.00.")
+    .min(0, "Amount cannot be negative."),
+);
+
+const reconciliationCutoffFieldSchema = z.preprocess(
+  (value) => {
+    try {
+      return parseReconciliationCutoffInput(value);
+    } catch {
+      return value;
+    }
+  },
+  z.date({
+    invalid_type_error: "Enter a valid reconciliation cutoff date and time.",
+  }),
+);
+
+export function basisMoneyInputToPence(value: string): number {
+  return parseBasisMoneyInputToPence(value);
+}
+
+export function basisMoneyToInput(amountInPence: number): string {
+  const pounds = Math.trunc(amountInPence / 100);
+  const remainder = Math.abs(amountInPence % 100);
+  return `${pounds}.${String(remainder).padStart(2, "0")}`;
+}
+
+export const upsertDistributionBasisSchema = z.object({
+  contributionPeriodId: z.string().trim().min(1),
+  grossQualifyingProductSalesGbp: basisMoneyFieldSchema,
+  discountsGbp: basisMoneyFieldSchema,
+  returnsRefundsGbp: basisMoneyFieldSchema,
+  successfulChargebacksGbp: basisMoneyFieldSchema,
+  vatExcludedGbp: basisMoneyFieldSchema,
+  contributorPoolBasisPoints: z.coerce
+    .number()
+    .int("Contributor Pool Basis Points must be a whole number.")
+    .min(0, "Contributor Pool Basis Points cannot be negative.")
+    .max(10000, "Contributor Pool Basis Points cannot exceed 10,000."),
+  reconciliationCutoffAt: reconciliationCutoffFieldSchema,
+});
+
+export type UpsertDistributionBasisInput = z.infer<
+  typeof upsertDistributionBasisSchema
+>;
+
+export const approveDistributionBasisSchema = z.object({
+  contributionPeriodId: z.string().trim().min(1),
+});
+
+export type ApproveDistributionBasisInput = z.infer<
+  typeof approveDistributionBasisSchema
+>;
+
+export const createDistributionCalculationSchema = z.object({
+  contributionPeriodId: z.string().trim().min(1),
+});
+
+export type CreateDistributionCalculationInput = z.infer<
+  typeof createDistributionCalculationSchema
+>;
+
+export const approveDistributionCalculationSchema = z.object({
+  calculationId: z.string().trim().min(1),
+});
+
+export type ApproveDistributionCalculationInput = z.infer<
+  typeof approveDistributionCalculationSchema
+>;
+
+export const voidDistributionCalculationSchema = z.object({
+  calculationId: z.string().trim().min(1),
+  voidReason: z
+    .string()
+    .trim()
+    .min(1, "A void reason is required.")
+    .max(2000, "Void reason must be 2000 characters or fewer."),
+});
+
+export type VoidDistributionCalculationInput = z.infer<
+  typeof voidDistributionCalculationSchema
+>;
+
+export const createReplacementCalculationSchema = z.object({
+  voidedCalculationId: z.string().trim().min(1),
+});
+
+export type CreateReplacementCalculationInput = z.infer<
+  typeof createReplacementCalculationSchema
 >;
